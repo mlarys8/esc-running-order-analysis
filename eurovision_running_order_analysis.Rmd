@@ -1,0 +1,246 @@
+---
+title: "Do We Dread the Draw?"
+subtitle: "Analyzing the Effect Running Order Has on the Eurovision Song Contest"
+author: "Matthew Larys"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+euro_data <- read.csv("eurovision_data.csv")
+library(tidyverse)
+```
+# Introduction
+
+In hopes of uniting Europe during a time of strife after the Second World War, Swiss media executive Marcel Bezen\c{c}on proposed the idea for what would become the Eurovision Song Contest in 1956. 7 countries participated in that first competition, and it has only grown over the years, more countries participated after the fall of the Iron Curtain and subsequent breakup of Eastern Europe. With the expansion of countries and the new advances in technology, the contest has completely changed since that first edition in 1956. The current format of the contest consists of 2 semi-finals, where the top 10 countries in points qualify for the final, where they join the "Big Five" nations of France, Germany, Italy, Spain, and the United Kingdom, and the winner of the previous years' contest if they are not one of the Big Five. Originally, entries were only scored from a professional jury from each participating country, but in 1997 the European Broadcasting Union (EBU) introduced a test for the 1997 where 5 countries could send in their own votes over the phone, hence creating the "televote". The next 20 years consisted of a mix between countries only using the televote or jury vote, a 50/50 split of the two, or combining the points into a single set of 12, 10, 8-1 to award to the entries. 2016 was the largest shake-up of the voting since the introduction of the televote, where the jury vote and the televote where separated into two independent point sets. The semi-final in its current state in the 2004 contest (though pre-selections did take place in 1993 and 1996 due to the number of eligible nations wanting to compete), with the points split in 2016 also happening in the semi-finals. 
+
+How well a song does in the Eurovision Song Contest (ESC) can depend on multiple factors. How good the song actually is, its live performance, and the staging of the performance are some of the key factors to know how well a song may do in the competition. The country's diaspora and its friends and neighbors forming voting blocs can also improve a song's position in the semi-final and final. But, one key factor not mentioned is where the song performs in the running order. The usual belief is the if the song is in the latter half of the order then it will provide a significant improvement to how they finish. The running order had been decided by a random draw up to the 2012 contest. But since the 2012 contest, participating countries could now draw whether they would perform in the first or second half of the final, and the host nation also decides via draw which half a country would perform in the semi-finals. The host nation then decide the running order based on the draws to create the best possible draw for a better TV show. The host nation is also the only nation that directly draws their own position in the final running order. The running order is now more important than ever for the 2023 contest, after a controversy regarding jury points left semi-final qualification entirely based on televoting results. <br>
+
+### This leads to the following questions:
+
+-   Which running spot, on average, is the best for winning in the final/semi-final?
+-   Which running spot in the semi-finals is best for qualifying?
+-   Is there a correlation between running order and televote score in the final? Semi-final?<br>
+
+## The Dataset
+
+The following dataset was taken from Janne Spijkervet's Eurovision Song Contest Dataset, though some modifications were made to make it up to date. Their set was only up to data with the canceled 2020 contest, as the 2021 and 2022 contests had to be manually added in. The link to the dataset is:
+
+*[Eurovision Data](https://github.com/Spijkervet/eurovision-dataset/blob/master/README.md)* <br>
+
+```{r}
+ex_data <<- euro_data %>%
+  filter(year == 2022)
+head(ex_data)
+```
+As an example of what the dataset looks like, we will look at the 2022 contest and its results. Each row is an entry in the contest, with the year, country, performer, and song as the first few columns. The columns that are of interest follow these first 4. The "place_contest" shows what position the song finished at the contest, the "sf_num" tells what semi-final they performed in (or left blank if they automatically qualify). The next two columns of "running_final" and "running_sf" show what position the song performed at in the final and semi-final, respectively. The "place_final" tells what place that song finished in the final if they qualified, and shows how many total points they received in the "points_final" column. The two following columns of "place_sf" and "points_sf" are the same as the previous two except for the semi-finals. The points for the final and semi-finals are broken down into the jury and televote for each, resulting in the final 4 columns of this dataset. 
+
+<br>
+To begin, we will start by just looking at the winners of the contests this century and their draw position in the final: <br>
+``` {r}
+wins_final <- euro_data %>%
+  filter(place_final == 1)
+
+tail(wins_final[, c("year", "to_country", "running_final")], n = 22)
+```
+<br> Most of the winners from the 2000's enjoyed the advantage of a late draw order. For context, the typical ESC final field is usually around 25-26 since 2011, but the size ranged from 23-26 in the early 2000's. The main exception to this is Turkey in 2003, where they narrowly won over Belgium by just 2 points (Belgium did take advantage of the running order that night, performing 22nd) in the largest contest to date at 26 participants, the most in a final until the 2012 contest which expanded the final to 26. The only other exceptions are 2004, 2014, 2015, 2017, 2019, and 2022 all performing before the halfway point. In fact, between Ukraine's win in 2004 and Austria's in 2014, none of the winning acts performed before 17th on the night, meaning that the winners of these finals came exclusively from the final third of the draw.    
+
+The pattern was broken in 2014 with Austria's Conchita Wurst winning the final while performing 11th. One year later, Sweden's M\r{a}ns Zelmerlow took home the win while performing 10th. Since those two wins, there have been three more winners who have performed in the first half of the final. Does this mean that the running order has become less important over time? Not necessarily. The host TV producers are now in charge of the final's running order, with the only randomness coming in whether the country performs in the first or second half. What is more evidenced is that countries that performed in the latter half of the first half of the final were able to win the contest. <br>
+
+# Draw Position and the Eurovision Final and Semi-Finals
+
+A later draw for a country may offer a better chance of winning the entire competition, which also means scoring more points in the second half compared to the first half. <br>
+
+``` {r, echo=TRUE}
+pts_ro <- euro_data %>% 
+  filter(!is.na(points_final)) %>%
+  filter(year >= 1998) %>%
+  group_by(running_final) %>%
+  summarise(pts_av = mean(points_final))
+
+pts_ro$pts_av <- trunc(pts_ro$pts_av*10^2)/10^2
+pts_labels <- c('1st','2nd','3rd',"4th","5th","6th","7th","8th","9th","10th","11th",
+                "12th","13th","14th","15th","16th","17th","18th","19th","20th","21st",
+                "22nd","23rd","24th","25th","26th")
+pts_ro <- pts_ro[-27,]
+```
+
+The code above gets the average points from each running order position from 1st to 26th. We are going to get rid of any na's within the dataset to remove any contests where the final point total was not know. This occurred twice: the inaugural contest in 1956, where voting took place behind closed doors and was never made public, and the 2020 contest, which was canceled due to the COVID-19 pandemic. The dataset will be limited to between the years of 1998 and 2022 however, which takes into the effect of the televote that was introduced in the 1998 contest. We will also remove the sole 27th position, since there is only one occurrance of that position in the contest's history and will effect the end result. <br>
+
+``` {r}
+ggplot(data = pts_ro, aes(x = running_final, y = pts_av)) +
+  geom_bar(position = "dodge", stat = "identity", fill = "steelblue") +
+  scale_x_continuous(labels=pts_labels, breaks = 1:26) +
+  geom_text(aes(label=pts_av), vjust=-0.25, color="black", size=2) +
+  labs(title = "Average Points by Running Order Position in Eurovision Finals 1998-2023", 
+       x = "Running Position", 
+       y = "Average Points")
+```
+Statistically, the best position in the running order is the 25th slot. In fact, the next three best positions all come from the latter half of the running order (20th, 24th, and 22nd). 11th and 12th come next in that order, which may be skewed since in the past 8 years, 4 of those winners came from the 11th or 12th spot in the order. The worst position in the final (as the community has long feared) is the 2nd spot, finishing with 20 points less than the next highest slot on average. The next worst being 4th, 1st, 3rd, 16th, 15th, 14th, and 6th. The 14th-16th slots are interesting since they are with the second half of the final, which is usually is believed to be the best place to win from. However, these positions count as "early" in their respective running order, coming at the beginning of the second half. Thus, it can be seen as beneficial to draw in the second half to have a higher chance of winning. There was one instance of the 27th position in 2015, when the contest was expanded for its 60th anniversary, as Italy scored 292 points and placed third on the night. <br>
+
+``` {r}
+pts_sf <- euro_data %>%
+  filter(!is.na(points_sf)) %>%
+  filter(year >= 2013) %>%
+  group_by(running_sf) %>%
+  summarise(pts_av = mean(points_sf))
+
+pts_sf$pts_av <- trunc(pts_sf$pts_av*10^2)/10^2
+pts_sf <- pts_sf[-19,]
+sf_labels <- c('1st','2nd','3rd',"4th","5th","6th","7th","8th","9th","10th","11th",
+               "12th","13th","14th","15th","16th","17th","18th","19th","20th","21st",
+               "22nd","23rd","24th","25th","26th","27th","28th")
+```
+
+<br> Next we will do the same for the semi-finals. The years will be modified slightly, as semi-finals in the state they are currently did not exist until the 2004 contest. There were pre-selections in the 1993 and 1996 contests, but they will not count since both took place behind closed doors. There was originally just 1 semi-final where the top 10 would join the top 10 from the previous contest plus the then "Big Four" (Italy was the country that was missing, as had an extensive hiatus from the contest between 1997 and 2011, and thus were not included in the automatic qualifiers). The semi-final from 2004-2007 featured around 25 entries, reaching the highest at 28 in 2007, the year before the semi-finals were split into two. We will be using the semi-final data from 2013 onward, as the TV producers took over deciding running order rather than it being a random draw. <br>
+
+```{r}
+ggplot(data = pts_sf, aes(x = running_sf, y = pts_av)) +
+  geom_bar(position = "dodge", stat = "identity", fill = "salmon") +
+  scale_x_continuous(labels=sf_labels, breaks = 1:28) +
+  geom_text(aes(label=pts_av), vjust=-0.25, color="black", size=2) +
+  labs(title = "Avg. Points by Running Order Position in Eurovision SF 2013-2023", 
+       x = "Running Position", 
+       y = "Average Points")
+```
+If you want to win the semi-final, performing 18th is the position you want. It has closed the show all but once, and is most likely to be the song most audiences will remember when they go to vote for their favorites. After the 18th position, the next best positions are the 9th, 12th, 16th, and 15th slots. 2nd is the worst on average by nearly 20 points, followed by the 11th, 3rd, 10th, and 5th positions. 
+
+
+The following code gets the winners of both the finals and the semi-finals and counts their running position. It then graphs in a bar chart for each the count of wins per running order position.
+``` {r}
+wins_final <- euro_data %>%
+  filter(place_final == 1) %>%
+  count(running_final)
+ggplot(data = wins_final, aes(x = running_final, y = n)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  scale_x_continuous(labels=pts_labels, breaks = 1:26) +
+  geom_text(aes(label=n), vjust=1.6, color="white", size=2.75) +
+  labs(title = "Number of Final Wins by Running Order Position in Eurovision 1957-2022", 
+       x = "Running Position", y = "Number of Wins")
+
+wins_sf <- euro_data %>%
+  filter(place_sf == 1) %>%
+  count(running_sf)
+ggplot(data = wins_sf, aes(x = running_sf, y = n)) +
+  geom_bar(stat = "identity", fill = "salmon") +
+  scale_x_continuous(labels=pts_labels, breaks = 1:26) +
+  geom_text(aes(label=n), vjust=1.6, color="white", size=2.75) +
+  labs(title = "Number of SF Wins by Running Order Position in Eurovision 2004-2022", 
+       x = "Running Position", y = "Number of Wins")
+```
+<br>Next we get into the wins per position in both the final and the semi-final. The most successful position in the final is the 17th position with 7 wins. This position includes Sweden's 2012 win, and three of Ireland's 7 wins overall (1980, 1992, and 1996). The next most successful positions in the final are the 8th and 14th positions at 5 wins each, although none of their wins have come within the past 20 years. In fact, the 8th slot's most recent win was in 1998 with Israel, and the 14th slot's most recent win was in 2000 with Denmark. The next most successful final positions are the 3rd, 11th, 12th, 18th, and 20th positions with 4 wins a piece. The 3rd position has not seen a lot of recent success, with its most recent win coming in 1994 with Ireland. The 9th position has had worse success in recent year, with its most recent win coming in 1988 with Switzerland. The 11th and 12th positions have had some success recently, with the 11th position getting its most recent win in 2017 with Portugal's record-setting points total of 731, and the 12th positions holds the most recent winner of Ukraine, who scored the most ever televoting points with 439. Denmark won the 18th position most recently in 2013, and Norway was the last to win from the 20th position in 2009. What stands out the most is that the position that scored the most points on average in the final, 25th, has not yet had anyone win from that position, as well as the 16th position. There have been two wins in the semi-final from the 16th position though, with Finland winning the semi-final in 2006 (before going on to win it all that year) and Malta won from the final slot in the first semi-final of 2021. The dreaded second position in both the final and the semi-final has not had anyone win from that position. 
+
+The 17th position in the semi-final is the most common winning position at 4 wins since 2004. The 17th slot is also a very common ending position for semi-finals, allowing for audiences to remember its performance more than performances that have come prior. The 7th, 13th, and 15th come in next at 3 semi-final wins each. Joining with the second slot as the worst for qualifying are the 3rd and 18th spots. The 3rd is equally known with the 2nd spot among the community to be one of, if not the, hardest spot to qualify from. The 18th spot is unusual, as like the 17th position is also frequents the end of the semi-final, but does not have a win to show for it. <br> 
+
+# Semi-Final Qualification and the Running Order
+
+Next, we will be looking at just the qualifiers from the semi-final and their average finishing position, and not looking at points (though we will get back to those). The code below filters out all entries that have come 10th or higher in the semi-final, meaning they have qualified for the final. This data will also filter out any entry after 2013, which is the year that the TV producers took control of deciding the running order instead of the draw being completely random. <br>
+``` {r}
+qualify_sf <- euro_data %>%
+  filter(year >= 2013) %>%
+  filter(place_sf <= 10) %>%
+  count(running_sf)
+
+ggplot(data = qualify_sf, aes(x = running_sf, y = n)) +
+  geom_bar(stat = "identity", fill = "salmon") +
+  scale_x_continuous(labels=sf_labels, breaks = 1:28) +
+  geom_text(aes(label=n), vjust=1.6, color="white", size=2.75) +
+  labs(title = "Count of SF Qualifiers by Running Order Position in Eurovision 2013-2022", 
+       x = "Running Position", 
+       y = "Number of Wins")
+```
+The best performing positions that have qualified are the 8th, 9th, 12th, and 15th positions. Because the semi-finals contained around 15-16 entries, anything before the 15th position will be slightly higher than 17th-19th. 19th technically is the worst at just 1 qualification from that position, but there has been just a single 19th slot since 2013. The next worst would go to the glorious 2nd position, with just 4 qualifications since 2013. Those 4 qualifications (and places) coming from Estonia in the first semi-final in 2013 (10th), Armenia in the first semi-final in 2015 (7th), Poland in the second semi-final in 2016 (6th), and Austria in the second semi-final in 2017 (7th).
+
+``` {r , warning = FALSE}
+av_sf <- euro_data %>%
+  filter(year >= 2013) %>%
+  group_by(running_sf) %>%
+  summarise(av_place_sf = mean(place_sf))
+
+av_sf$av_place_sf <- trunc(av_sf$av_place_sf*10^2)/10^2
+av_sf <- av_sf[-19,]
+ggplot(data = av_sf, aes(x = running_sf, y = av_place_sf)) +
+  geom_bar(stat = "identity", fill = "salmon") +
+  scale_x_continuous(labels=sf_labels, breaks = 1:28) +
+  geom_text(aes(label=av_place_sf), vjust=-0.25, color="black", size=2) +
+  labs(title = "Avg. Placement of SF Participants by Running Order Position 2013-2022", 
+       x = "Running Position", 
+       y = "Place")
+```
+In this graph, the lower number is better, meaning that position has had a higher placement in the semi-final compared to other positions. Discounting the 19th position (which has an average ranking of 2 with just one entry), the best average position in 18th at an average finishing position of 6th. It is followed by 12th, 9th, 15th, and 8th place. The worst positions on average are 10th, 3rd, 11th, and 2nd comes in last once again. 
+
+# The Separation of the Televote
+
+Since 2016, the televote and jury vote have been separated from each other, effectively doubling the number of points a country can potentially earn. Televote scores were not known before 2016, so we will analyze just the results from that year onward. If the belief that performing later in the competition results in a higher score, then we should expect that the second half of the final and the semi-finals to have higher televoting scores than the first. We will begin by analyzing the graphs of the average televoting scores by running position in the final and the semi-finals.
+
+The code for the final and the semi-final are nearly identical, just switching which one we are looking at. It first filters out all non-televoting scores, then groups by the running order, then gets the mean of the televoting scores at each running order position. The first one we will look at is for the final: <br>
+
+``` {r}
+tele_final <- euro_data %>%
+  filter(!is.na(points_tele_final)) %>%
+  group_by(running_final) %>%
+  summarise(tele_av = mean(points_tele_final))
+
+tele_final$tele_av <- trunc(tele_final$tele_av)
+
+ggplot(data = tele_final, aes(x = running_final, y = tele_av)) +
+  geom_bar(position = "dodge", stat = "identity", fill = "steelblue") +
+  scale_x_continuous(labels=pts_labels, breaks = 1:26) +
+  geom_text(aes(label=tele_av), vjust=1.6, color="white", size=2.75) +
+  labs(title = "Average Televoting Points in Eurovision Final 2016-2022", 
+       x = "Running Position", 
+       y = "Average Televote Points")
+```
+The 12th position is by far the highest position, having an average point total of nearly 25 points higher than the next highest position. However, this position is a minor anomaly, with Ukraine winning the competition in 2022 with a televoting score of 439, taking home nearly 70% of the televoting score. Discounting this entry, 4 out of the next 5 highest scores are within the second half of the final. 
+
+``` {r}
+tele_sf <- euro_data %>%
+  filter(!is.na(points_tele_sf)) %>%
+  filter(year >= 2016) %>%
+  group_by(running_sf) %>%
+  summarise(tele_av = mean(points_tele_sf))
+tele_sf <- tele_sf[-19,]
+tele_sf$tele_av <- trunc(tele_sf$tele_av)
+ggplot(data = tele_sf, aes(x = running_sf, y = tele_av)) +
+  geom_bar(position = "dodge", stat = "identity", fill = "salmon") +
+  scale_x_continuous(labels=sf_labels, breaks = 1:28) +
+  geom_text(aes(label=tele_av), vjust=1.6, color="white", size=2.75) +
+  labs(title = "Average Televoting Points in Eurovision Semi-Finals 2016-2022", 
+       x = "Running Position", 
+       y = "Average Televote Points")
+```
+Narrowly coming out as the best position for the televote in the semi-final is 18th place, which has only been used a total of 8 times since 2013, closing out the show all but a single time in 2018. The next best positions are 9th, 12th, 15th, and 14th. The 2nd position is last once again, followed by the usual worst suspects of 11th, 10th, and 4th place. 
+
+# Does the Running Order Matter?
+
+After going through the graphs, we will now test to see if any of the previous factors have an actual correlation between each other using analysis of variance tests, or ANOVA. We will test each of the hypotheses at a confidence level of $\alpha = 0.05$ that there is no correlation between running order and points earned in both the total amount and jus the televote, and in the final and semi-final
+
+
+The first test we will investigate is whether or not running order has an effect on the total points earned in the final. 
+``` {r}
+points_final_aov <- aov(data = pts_ro, running_final ~ pts_av)
+summary(points_final_aov)
+```
+Looking at the p-value of this set of 0.000483, it is well below the $\alpha$ of 0.05. Therefore, there is significant evidence that a correlation exists between total points in the final and running position in the final.
+
+The second test will be the same as the first, except we will be looking at the semi-final and total points earned
+``` {r}
+points_sf_aov <- aov(data = pts_sf, running_sf ~ pts_av)
+summary(points_sf_aov)
+```
+This set's p-value of 0.00322 is less than the $\alpha$ of 0.05. Therefore, there is significant evidence that a correlations exists between total points in the semi-final and running position in the semi-final
+
+```{r}
+tele_final_aov <- aov(data = tele_final, running_final ~ tele_av)
+summary(tele_final_aov)
+```
+The next two tests will be testing if there exists a correlation between the total number of televote points and the running order in both the final and the semi-final. First we will begin with the final. This set's p-value of 0.00196 is less than the $\alpha$ of 0.05. Therefore, there is significant evidence that a correlation exists between the total number of televoting points and running order in the final.
+``` {r}
+tele_sf_aov <- aov(data = tele_sf, running_sf ~ tele_av)
+summary(tele_sf_aov)
+```
+Finally, we will test if there is any correlation between the total number of televoting points and the running order in the semi-final. This set's p-value of 0.00501 is less than the $\alpha$ of 0.05. Therefore, there is significant evidence that a correlation exists between the total number of televoting points and the running order in the semi-final. 
+
+# The Verdict
+
+The running order is something to fear for as a Eurovision contestant. Your song may be good, but getting a bad slot in either the semi-final or grand final will hurt your chances of winning. A perfect recent example of this is Malta from 2021. It was seen as a favorite to win the contest beforehand, and performed last in the first-semi final, where it came first place scoring first in the jury vote and second in the televote. However, Malta's chances of winning decreased dramatically when it drew in the first half of the final, eventually placing in the 7th slot on the night of the final. As expected, it did well with the jury vote, placing third after the jury's votes were all tallied up. Unfortunately, the televote went to other songs on the night, as Malta only received 47 points and finished 7th in the final. It's hard for the average viewer to remember songs from earlier in the night, and drawing in the first half of the final provides a severe disadvantage to any competitor wanting to win the Eurovision Song Contest. So, if you are a contestant in the Eurovision Song Contest, then you best dread the draw and hope that you get a good position to win it all.
